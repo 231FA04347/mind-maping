@@ -1,8 +1,8 @@
 // Configuration file for API keys and endpoints
 const CONFIG = {
     // OpenAI API configuration
-    OPENAI_API_KEY: "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",
-    OPENAI_API_ENDPOINT: "https://openrouter.ai/api/v1",
+    OPENAI_API_KEY: "",
+    OPENAI_API_ENDPOINT: "",
     
     // YouTube Data API configuration
     YOUTUBE_API_KEY: "your-youtube-api-key",
