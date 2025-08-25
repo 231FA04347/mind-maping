@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zoomable Interactive Mind Map</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dom-to-image@2.6.0/dist/dom-to-image.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9fafb;
+            color: #1f2937;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            box-sizing: border-box;
+            overflow-x: hidden;
+        }
+
+        #main-container {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            width: 100%;
+            max-width: 2000px;
+            margin: 0 auto;
+            padding: 25px;
+            box-sizing: border-box;
+        }
+
+        .input-section {
+            background-color: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.07);
+            padding: 35px;
+        }
+
+        .input-section h2 {
+            margin-top: 0;
+            color: #111827;
+            font-size: 24px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 220px;
+            padding: 18px;
+            border: 1.5px solid #d1d5db;
+            border-radius: 12px;
+            font-size: 17px;
+            line-height: 1.6;
+            resize: vertical;
+            margin-bottom: 25px;
+            box-sizing: border-box;
+            color: #374151;
+        }
+
+        textarea:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+            outline: none;
+        }
+
+        #mindmap-container {
+            background-color: #1b0202;
+            border-radius: 16px;
+            box-shadow: 0 6px 25px rgba(232, 226, 226, 0.07);
+            padding: 0;
+            transition: all 0.3s ease-in-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #mindmap-container.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 10000;
+            border-radius: 0;
+            background-color: #020b14;
+        }
+
+        svg#mindmap-svg {
+            width: 100%;
+            height: 75vh;
+            min-height: 650px;
+            display: block;
+            cursor: grab;
+        }
+        svg#mindmap-svg:active {
+            cursor: grabbing;
+        }
+
+        .fullscreen svg#mindmap-svg {
+            height: 100vh;
+            min-height: 100vh;
+        }
+
+        .node rect {
+            fill: #e0f2fe;
+            stroke: #7dd3fc;
+            stroke-width: 2px;
+            rx: 10px;
+            ry: 10px;
+            cursor: pointer;
+            transition: fill 0.2s ease, stroke 0.2s ease;
+        }
+
+        .node:hover rect {
+            fill: #bae6fd;
+            stroke: #38bdf8;
+        }
+
+        .node text {
+            font-size: 16px;
+            font-weight: 500;
+            fill: #0c4a6e;
+            text-anchor: middle;
+            dominant-baseline: central;
+            pointer-events: none;
+        }
+
+        .link {
+            fill: none;
+            stroke: #a5b4fc;
+            stroke-width: 2.5px;
+        }
+
+        button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            margin-right: 12px;
+            margin-bottom: 12px;
+        }
+
+        button:hover {
+            background-color: #2563eb;
+        }
+        button:active {
+            transform: translateY(1px);
+        }
+
+        #fullscreen-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 10001;
+            padding: 10px 15px;
+            background-color: rgba(255, 255, 255, 0.8);
+            color: #3b82f6;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+         #fullscreen-btn:hover {
+            background-color: white;
+         }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        #image-input,
+        #pdf-input {
+            margin-right: 12px;
+            margin-bottom: 12px;
+            padding: 7px 0;
+        }
+
+        #extracted-text-box {
+            width: 100%;
+            min-height: 50px;
+            background: #f1f5f9;
+            color: #334155;
+            border-radius: 8px;
+            margin: 10px 0 20px 0;
+            padding: 10px 16px;
+            font-size: 15px;
+            font-family: inherit;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="main-container">
+        <div class="input-section">
+            <h2>Create Your Mind Map</h2>
+            <p style="font-size: 16px; color: #4b5563; margin-bottom: 15px;">
+                Enter your text below. Use indentation (spaces or tabs) to define the hierarchy.
+                The first line will be the central topic.<br>
+                <b>Or, upload an image or PDF containing text to generate a mind map from it.</b>
+            </p>
+            <textarea id="input-text" placeholder="Example:
+Central Topic
+  Main Branch 1
+    Sub-branch 1.1
+    Sub-branch 1.2
+  Main Branch 2
+    Sub-branch 2.1"></textarea>
+            <div class="controls">
+                <button onclick="generateUserMindMap()">Generate Mind Map</button>
+                <!-- <button onclick="saveMindMapAsImage()">Save as JPG</button>
+                <button onclick="resetZoomAndPosition()">Reset View</button>
+                <input type="file" id="image-input" accept="image/*">
+                <button onclick="processImageForMindMap()">Generate Mind Map from Image</button>
+                <input type="file" id="pdf-input" accept="application/pdf">
+                <button onclick="processPdfForMindMap()">Generate Mind Map from PDF</button> -->
+            </div>
+            <div id="extracted-text-box"></div>
+        </div>
+
+        <div id="mindmap-container">
+            <button id="fullscreen-btn" onclick="toggleFullscreenView()">
+                <span id="fullscreen-text">⤢</span>
+            </button>
+            <svg id="mindmap-svg"></svg>
+        </div>
+    </div>
+
+    <script>
+        const baseMargin = { top: 60, right: 100, bottom: 60, left: 100 };
+        let currentMargin = {...baseMargin};
+        let availableWidth, availableHeight;
+        let nodeIdCounter = 0;
+        const animationDuration = 600;
+        let currentRootNode;
+        let d3Treemap;
+        let d3SvgRootElement;
+        let d3SvgGroup;
+
+        let zoomBehavior;
+
+        function parseIndentedTextToHierarchy(text) {
+            const lines = text.split('\n');
+            if (!lines[0] || !lines[0].trim()) return { name: "Error: No root topic", children: [] };
+
+            const rootNode = { name: lines[0].trim(), children: [] };
+            const parentStack = [{ node: rootNode, indentLevel: -1 }];
+
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i];
+                const trimmedLine = line.trim();
+                if (!trimmedLine) continue;
+
+                const currentIndentLevel = line.search(/\S/);
+                const newNode = { name: trimmedLine, children: [] };
+
+                while (parentStack.length > 1 && parentStack[parentStack.length - 1].indentLevel >= currentIndentLevel) {
+                    parentStack.pop();
+                }
+
+                if (parentStack.length > 0) {
+                     parentStack[parentStack.length - 1].node.children.push(newNode);
+                }
+
+                parentStack.push({ node: newNode, indentLevel: currentIndentLevel });
+            }
+            return rootNode;
+        }
+
+        function initializeMindmapLayout() {
+            const container = document.getElementById('mindmap-container');
+
+            currentMargin = container.classList.contains('fullscreen') ?
+                { top: 40, right: 50, bottom: 40, left: 50 } :
+                {...baseMargin};
+
+            const svgContainerWidth = container.clientWidth;
+            const svgContainerHeight = container.clientHeight;
+
+            // Use nodeSize for more spacing between nodes
+            availableWidth = svgContainerWidth - currentMargin.left - currentMargin.right;
+            availableHeight = svgContainerHeight - currentMargin.top - currentMargin.bottom;
+            availableWidth = Math.max(availableWidth, 200);
+            availableHeight = Math.max(availableHeight, 200);
+
+            d3SvgRootElement = d3.select("#mindmap-svg");
+            d3SvgRootElement.selectAll("*").remove();
+
+            d3SvgGroup = d3SvgRootElement.append("g");
+
+            // Use nodeSize for increased spacing (vertical, horizontal)
+            d3Treemap = d3.tree().nodeSize([110, 370]);
+
+            zoomBehavior = d3.zoom()
+                .scaleExtent([0.1, 5])
+                .on("zoom", (event) => {
+                    d3SvgGroup.attr("transform",
+                        `translate(${currentMargin.left + event.transform.x}, ${currentMargin.top + event.transform.y}) scale(${event.transform.k})`
+                    );
+                });
+
+            d3SvgRootElement.call(zoomBehavior).on("dblclick.zoom", null);
+
+            const initialTransform = d3.zoomIdentity.translate(currentMargin.left, currentMargin.top).scale(1);
+            d3SvgRootElement.call(zoomBehavior.transform, initialTransform);
+        }
+
+        function estimateTextWidth(text, fontSize = 16, fontWeight = 500) {
+            const avgCharWidth = fontSize * 0.55;
+            return Math.min(text.length * avgCharWidth, availableWidth * 0.45);
+        }
+
+        function updateMindmapVisualization(source) {
+            if (!currentRootNode || !d3Treemap || !d3SvgGroup) return;
+
+            const treeData = d3Treemap(currentRootNode);
+            const nodes = treeData.descendants();
+            const links = treeData.links();
+
+            const nodeSelection = d3SvgGroup.selectAll('g.node')
+                .data(nodes, d => d.id || (d.id = ++nodeIdCounter));
+
+            const nodeEnter = nodeSelection.enter().append('g')
+                .attr('class', 'node')
+                .attr('transform', `translate(${source.y0 || 0},${source.x0 || 0})`)
+                .on('click', (event, d) => {
+                    event.stopPropagation();
+                    if (d.children) {
+                        d._children = d.children;
+                        d.children = null;
+                    } else {
+                        d.children = d._children;
+                        d._children = null;
+                    }
+                    updateMindmapVisualization(d);
+                });
+
+            const nodePaddingHorizontal = 25;
+            const nodePaddingVertical = 12;
+            const minNodeWidth = 120;
+            const nodeHeight = 55;
+
+            nodeEnter.append('rect')
+                .attr('width', d => Math.max(minNodeWidth, estimateTextWidth(d.data.name) + nodePaddingHorizontal * 2))
+                .attr('height', nodeHeight)
+                .attr('x', d => -(Math.max(minNodeWidth, estimateTextWidth(d.data.name) + nodePaddingHorizontal * 2) / 2))
+                .attr('y', -nodeHeight / 2);
+
+            nodeEnter.append('text')
+                .text(d => d.data.name)
+                .style('fill-opacity', 0);
+
+            const nodeUpdate = nodeEnter.merge(nodeSelection);
+
+            nodeUpdate.transition()
+                .duration(animationDuration)
+                .attr('transform', d => `translate(${d.y},${d.x})`);
+
+            nodeUpdate.select('rect')
+                .transition()
+                .duration(animationDuration)
+                .attr('width', d => Math.max(minNodeWidth, estimateTextWidth(d.data.name) + nodePaddingHorizontal * 2))
+                .attr('height', nodeHeight)
+                .attr('x', d => -(Math.max(minNodeWidth, estimateTextWidth(d.data.name) + nodePaddingHorizontal * 2) / 2))
+                .attr('y', -nodeHeight / 2);
+
+            nodeUpdate.select('text')
+                .transition()
+                .duration(animationDuration)
+                .style('fill-opacity', 1);
+
+            const nodeExit = nodeSelection.exit().transition()
+                .duration(animationDuration)
+                .attr('transform', `translate(${source.y},${source.x})`)
+                .remove();
+
+            nodeExit.select('rect').attr('width', 1e-6).attr('height', 1e-6);
+            nodeExit.select('text').style('fill-opacity', 1e-6);
+
+            const linkSelection = d3SvgGroup.selectAll('path.link')
+                .data(links, d => d.target.id);
+
+            const linkEnter = linkSelection.enter().insert('path', 'g')
+                .attr('class', 'link')
+                .attr('d', d => {
+                    const o = { x: source.x0 || 0, y: source.y0 || 0 };
+                    return diagonalPath(o, o);
+                });
+
+            linkEnter.merge(linkSelection).transition()
+                .duration(animationDuration)
+                .attr('d', d => diagonalPath(d.source, d.target));
+
+            linkSelection.exit().transition()
+                .duration(animationDuration)
+                .attr('d', d => {
+                    const o = { x: source.x, y: source.y };
+                    return diagonalPath(o, o);
+                })
+                .remove();
+
+            nodes.forEach(d => {
+                d.x0 = d.x;
+                d.y0 = d.y;
+            });
+        }
+
+        function diagonalPath(s, d) {
+            return `M ${s.y} ${s.x}
+                    C ${(s.y + d.y) / 2} ${s.x},
+                      ${(s.y + d.y) / 2} ${d.x},
+                      ${d.y} ${d.x}`;
+        }
+
+        function generateUserMindMap() {
+            const text = document.getElementById('input-text').value;
+            if (!text.trim()) {
+                alert('Please enter some text for the mind map.');
+                return;
+            }
+            document.getElementById('extracted-text-box').style.display = "none";
+            document.getElementById('extracted-text-box').innerText = "";
+            initializeMindmapLayout();
+            const data = parseIndentedTextToHierarchy(text);
+            currentRootNode = d3.hierarchy(data, d => d.children);
+
+            currentRootNode.x0 = availableHeight / 2;
+            currentRootNode.y0 = 0;
+
+            if (currentRootNode.children) {
+                currentRootNode.children.forEach(collapseNode);
+            }
+            updateMindmapVisualization(currentRootNode);
+            resetZoomAndPosition(false);
+        }
+
+        function collapseNode(d) {
+            if (d.children) {
+                d._children = d.children;
+                d._children.forEach(collapseNode);
+                d.children = null;
+            }
+        }
+
+        function resetZoomAndPosition(useTransition = true) {
+            if (d3SvgRootElement && zoomBehavior) {
+                const initialTransform = d3.zoomIdentity.translate(currentMargin.left, currentMargin.top).scale(1);
+                if (useTransition) {
+                    d3SvgRootElement.transition().duration(animationDuration).call(zoomBehavior.transform, initialTransform);
+                } else {
+                    d3SvgRootElement.call(zoomBehavior.transform, initialTransform);
+                }
+            }
+        }
+
+        function toggleFullscreenView() {
+            const container = document.getElementById('mindmap-container');
+            const isFullscreen = container.classList.toggle('fullscreen');
+            document.getElementById('fullscreen-text').textContent = isFullscreen ? '✕' : '⤢';
+
+            setTimeout(() => {
+                initializeMindmapLayout();
+                if (currentRootNode) {
+                    currentRootNode.x0 = availableHeight / 2;
+                    currentRootNode.y0 = 0;
+                    updateMindmapVisualization(currentRootNode);
+                    resetZoomAndPosition(false);
+                }
+            }, 50);
+        }
+
+        function saveMindMapAsImage() {
+            if (!currentRootNode) {
+                alert("Please generate a mind map first.");
+                return;
+            }
+            const mindmapNode = document.getElementById('mindmap-svg');
+
+            domtoimage.toJpeg(mindmapNode, {
+                quality: 0.98,
+                bgcolor: '#f9fafb',
+            })
+            .then(dataUrl => {
+                const link = document.createElement('a');
+                link.download = 'mindmap.jpg';
+                link.href = dataUrl;
+                link.click();
+            })
+            .catch(error => {
+                console.error('Error saving mind map:', error);
+                alert('Error saving mind map as image. Check console for details.');
+            });
+        }
+
+        // Image Mind Map Logic
+        async function processImageForMindMap() {
+            const input = document.getElementById('image-input');
+            if (!input.files || input.files.length === 0) {
+                alert("Please select an image file.");
+                return;
+            }
+
+            const file = input.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const extractedBox = document.getElementById('extracted-text-box');
+            extractedBox.style.display = "block";
+            extractedBox.innerText = "Extracting text from image and generating mind map...";
+
+            try {
+                const response = await fetch('/process-image', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    extractedBox.innerText = "";
+                    extractedBox.style.display = "none";
+                    alert("Image processing failed: " + (result.error || "Unknown error"));
+                    return;
+                }
+
+                // Show extracted OCR text
+                extractedBox.innerText = "Extracted text from image:\n" + result.extracted_text;
+
+                // Put the mind map in the textarea and generate visualization
+                document.getElementById('input-text').value = result.mind_map;
+                generateUserMindMap();
+            } catch (e) {
+                extractedBox.innerText = "";
+                extractedBox.style.display = "none";
+                alert("Error uploading or processing image: " + e.message);
+            }
+        }
+
+        // PDF Mind Map Logic
+        async function processPdfForMindMap() {
+            const input = document.getElementById('pdf-input');
+            const extractedBox = document.getElementById('extracted-text-box');
+            if (!input.files || input.files.length === 0) {
+                alert("Please select a PDF file.");
+                return;
+            }
+            const file = input.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            extractedBox.style.display = "block";
+            extractedBox.innerText = "Extracting text from PDF and generating mind map...";
+
+            try {
+                const response = await fetch('/process-pdf', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                if (!result.success) {
+                    extractedBox.innerText = "";
+                    extractedBox.style.display = "none";
+                    alert("PDF processing failed: " + (result.error || "Unknown error"));
+                    return;
+                }
+                extractedBox.innerText = "Extracted text from PDF:\n" + result.extracted_text;
+                document.getElementById('input-text').value = result.summary;
+                generateUserMindMap();
+            } catch (e) {
+                extractedBox.innerText = "";
+                extractedBox.style.display = "none";
+                alert("Error uploading or processing PDF: " + e.message);
+            }
+        }
+
+        window.addEventListener('load', () => {
+            initializeMindmapLayout();
+        });
+
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                setTimeout(() => {
+                    initializeMindmapLayout();
+                    if (currentRootNode) {
+                        currentRootNode.x0 = availableHeight / 2;
+                        currentRootNode.y0 = 0;
+                        updateMindmapVisualization(currentRootNode);
+                        resetZoomAndPosition(false);
+                    }
+                }, 50);
+            }, 250);
+        });
+
+    </script>
+</body>
+</html>
